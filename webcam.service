@@ -1,0 +1,10 @@
+# this belongs in /etc/systemd/system/webcam.service
+[Unit]
+Description=Starts webcam
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/webcam
+
+[Install]
+WantedBy=multi-user.target
