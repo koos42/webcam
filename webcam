@@ -3,11 +3,27 @@
 # This goes in /usr/bin owned by root, permissions: 755
 
 WEBCAM_PID='x'
-IP_ADDR=`ifconfig | grep "inet addr:192.168" | xargs | awk '{print $2}' | sed s/addr://`
+
+WEBCAM_AWB=incandescent
+WEBCAM_AWB_RUNNING=incandescent
+
+WEBCAM_ISO=800
+WEBCAM_ISO_RUNNING=800
+
+WEBCAM_IP_ADDR='127.0.0.1'
+WEBCAM_IP_ADDR_RUNNING='127.0.0.1'
 
 function start_webcam() {
-        raspivid -a "$IP_ADDR" -t 0 --awb incadescent --ISO 800 &
+        raspivid -a "$WEBCAM_IP_ADDR" -t 0 --awb $WEBCAM_AWB --ISO $WEBCAM_ISO &
         WEBCAM_PID=$!
+
+        # keep track of env at time of start-up, to check for changes, later
+        WEBCAM_AWB_RUNNING=$WEBCAM_AWB
+        WEBCAM_ISO_RUNNING=$WEBCAM_ISO
+        WEBCAM_IP_ADDR_RUNNING=$WEBCAM_IP_ADDR
+
+        echo $WEBCAM_IP_ADDR_RUNNING
+        echo $WEBCAM_IP_ADDR
 }
 
 function restart_webcam() {
@@ -15,15 +31,17 @@ function restart_webcam() {
         start_webcam
 }
 
+function env_state_changed() {
+        WEBCAM_IP_ADDR=`ifconfig | grep "inet addr:192.168" | xargs | awk '{print $2}' | sed s/addr://`
+        echo $WEBCAM_IP_ADDR
+        ! [ $WEBCAM_IP_ADDR = $WEBCAM_IP_ADDR_RUNNING ]
+}
+
 start_webcam
 
-while [ -z "$IP_ADDR" ]; do
-        sleep 1
-        IP_ADDR=`ifconfig | grep "inet addr:192.168" | xargs | awk '{print $2}' | sed s/addr://`
-done
-
-restart_webcam
-
 while [ 1 ]; do
-  sleep 10 # no-op, leave process running, to not kill child processors
+        sleep 30
+        if env_state_changed; then
+                restart_webcam
+        fi
 done
