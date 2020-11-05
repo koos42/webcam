@@ -7,4 +7,4 @@ while [ -z "$IP_ADDR" ]; do
         IP_ADDR=`ifconfig | grep "inet addr:192.168" | xargs | awk '{print $2}' | sed s/addr://`
 done
 
-raspivid -a "$IP_ADDR" -t 0
+raspivid -a "$IP_ADDR" -t 0 --awb incadescent --ISO 800
