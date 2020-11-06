@@ -1,47 +1,55 @@
 #!/bin/bash
 
 # This goes in /usr/bin owned by root, permissions: 755
+STATE_DIR=/run/webcam_state
+mkdir -p $STATE_DIR
 
-WEBCAM_PID='x'
+# create named states for managing state
+PID_FILE="$STATE_DIR/webcam.pid"
 
-WEBCAM_AWB=incandescent
-WEBCAM_AWB_RUNNING=incandescent
+AWB_STATE="$STATE_DIR/awb_state"
+echo "incandescent" > $AWB_STATE
 
-WEBCAM_ISO=800
-WEBCAM_ISO_RUNNING=800
+ISO_STATE="$STATE_DIR/iso_state"
+echo "300" > $ISO_STATE
 
-WEBCAM_IP_ADDR='127.0.0.1'
-WEBCAM_IP_ADDR_RUNNING='127.0.0.1'
+ANNOTATION_STATE="$STATE_DIR/annotation_state"
+echo "" > $ANNOTATION_STATE
 
 function start_webcam() {
-        raspivid -a "$WEBCAM_IP_ADDR" -t 0 --awb $WEBCAM_AWB --ISO $WEBCAM_ISO &
-        WEBCAM_PID=$!
+  read AWB <$AWB_STATE
+  read ISO <$ISO_STATE
+  read ANNOTATION <$ANNOTATION_STATE
 
-        # keep track of env at time of start-up, to check for changes, later
-        WEBCAM_AWB_RUNNING=$WEBCAM_AWB
-        WEBCAM_ISO_RUNNING=$WEBCAM_ISO
-        WEBCAM_IP_ADDR_RUNNING=$WEBCAM_IP_ADDR
-
-        echo $WEBCAM_IP_ADDR_RUNNING
-        echo $WEBCAM_IP_ADDR
+  raspivid -a "$ANNOTATION" -t 0 --awb "$AWB" --ISO "$ISO" &
+  echo $! > $PID_FILE
 }
 
 function restart_webcam() {
-        kill -9 $WEBCAM_PID
-        start_webcam
+  pkill --signal SIGKILL --pidfile $PID_FILE
+  start_webcam
 }
 
-function env_state_changed() {
-        WEBCAM_IP_ADDR=`ifconfig | grep "inet addr:192.168" | xargs | awk '{print $2}' | sed s/addr://`
-        echo $WEBCAM_IP_ADDR
-        ! [ $WEBCAM_IP_ADDR = $WEBCAM_IP_ADDR_RUNNING ]
+function restart_on_setting_change() {
+  read new_awb <$AWB_STATE
+  read new_iso <$ISO_STATE
+  read new_annotation <$ANNOTATION_STATE
+
+  if [[ "$new_awb" != "$AWB" || \
+     "$new_iso" != "$ISO" || \
+     "$new_annotation" != "$ANNOTATION" ]]
+  then
+    restart_webcam
+  fi
 }
 
 start_webcam
 
-while [ 1 ]; do
-        sleep 30
-        if env_state_changed; then
-                restart_webcam
-        fi
+while true; do
+  if [ "$ANNOTATION" == '' ]; then
+    ifconfig | grep "inet addr:192.168" | xargs | awk '{print $2}' | sed s/addr:// > $ANNOTATION_STATE
+  fi
+
+  restart_on_setting_change
+  sleep 1
 done
